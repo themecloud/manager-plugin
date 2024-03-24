@@ -17,7 +17,9 @@ require_once('/app/.include/manager.php');
 $app_id = defined('APP_ID') ? APP_ID : false;
 $branch = defined('BRANCH') ? BRANCH : false;
 $wp_api_key = defined('WP_API_KEY') ? WP_API_KEY : false;
-$cfcache_enabled = defined('CFCACHE_ENABLED') ? CFCACHE_ENABLED : false;
+$cfcache_enabled = defined('CFCACHE_ENABLED') ? CFCACHE_ENABLED : "false";
+$private = defined('PRIVATE_MODE') ? PRIVATE_MODE : "false";
+
 $app_env = ['APP_ID' => $app_id, 'BRANCH' => $branch, 'WP_API_KEY' => $wp_api_key, 'CFCACHE_ENABLED' => $cfcache_enabled];
 
 if (strpos($_SERVER['REQUEST_URI'], 'hostmanager') !== false) {
@@ -122,7 +124,6 @@ function faaaster_get_check()
 
 function faaaster_manager_do_remote_get(string $url, array $args = array())
 {
-    $headers = $args['headers'];
     $headers = array(
         "X-Purge-Cache:true",
         "Host:" . wp_parse_url(home_url())['host'],
@@ -158,6 +159,11 @@ function faaaster_manager_clear_all_cache()
 
     // Pagespeed
     touch('/tmp/pagespeed/cache.flush');
+
+    // Cloudflare
+    if ($app_id && $wp_api_key && $branch && $cfcache_enabled == "true" && function_exists('faaaster_cf_purge_all')) {
+        faaaster_cf_purge_all();
+    }
 
     // Cache objet WordPress
     wp_cache_flush();
@@ -418,11 +424,10 @@ function faaaster_run_static_export()
     }
 }
 
-// Intercept emails 
+// Intercept emails
 function faaaster_intercept_emails($args)
 {
-    $private = defined('PRIVATE_MODE') ? PRIVATE_MODE : false;
-    if (get_option('disable_emails') === 'yes' && $private === "true") {
+    if (get_option('disable_emails') === 'yes' && $private == "true") {
         return []; // Returning an empty array to cancel email sending
     }
     return $args;
@@ -620,7 +625,8 @@ add_filter('script_loader_src', 'faaaster_remove_version_from_style_js');
 
 
 // Manage Cloudflare cache
-if ($app_id && $wp_api_key && $branch && $cfcache_enabled) {
+if ($app_id && $wp_api_key && $branch && $cfcache_enabled == "true") {
+    error_log("CF CACHE ENABLED " . $cfcache_enabled);
     function faaaster_cf_purge_all()
     {
         // error_log("Purge everything");
